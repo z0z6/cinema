@@ -23,28 +23,35 @@ function buildVideoScreen(group, videoUrl, title, maxWidth, maxHeight) {
       w = h * aspect;
     }
 
+    // DUŻA RAMKA - jak dla obrazów
     const FRAME_DEPTH = 0.15;
-    const FRAME_PAD = 0.2;
+    const FRAME_PAD = 0.25; // Grubsza ramka
     
     const frameGeo = new THREE.BoxGeometry(w + FRAME_PAD * 2, h + FRAME_PAD * 2, FRAME_DEPTH);
-    const frameMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.2, metalness: 0.9 });
+    const frameMat = new THREE.MeshStandardMaterial({ 
+      color: 0x1a1a1a, 
+      roughness: 0.3, 
+      metalness: 0.7 
+    });
     const frame = new THREE.Mesh(frameGeo, frameMat);
     frame.position.z = -FRAME_DEPTH / 2;
     group.add(frame);
 
+    // Ekran wideo
     const screenMat = new THREE.MeshBasicMaterial({ map: texture });
     const screen = new THREE.Mesh(new THREE.PlaneGeometry(w, h), screenMat);
     screen.position.z = FRAME_DEPTH / 2 + 0.01;
     group.add(screen);
 
-    const light = new THREE.PointLight(0xffffff, 20, 10, 2);
-    light.position.set(0, 0, 2.0);
-    group.add(light);
+    // Światło od ekranu (efekt kinowy)
+    const screenLight = new THREE.PointLight(0xffffff, 15, 8, 2);
+    screenLight.position.set(0, 0, 2.5);
+    group.add(screenLight);
   };
 
   group.userData.isVideo = true;
   group.userData.videoElement = video;
-  group.userData.title = title || 'Stream wideo';
+  group.userData.title = title || 'Film';
 }
 
 export function disposeVideos(scene, videoGroups) {
@@ -74,7 +81,7 @@ export function createVideoGroups(scene, streamsData) {
     group.position.set(...slot.pos);
     group.rotation.y = slot.rotY;
 
-    const entry = streamsData[i] || streamsData[0]; 
+    const entry = streamsData[i] || streamsData[0];
     
     if (entry && entry.url) {
       buildVideoScreen(group, entry.url, entry.title, slot.maxWidth, slot.maxHeight || 5);
