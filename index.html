@@ -8,8 +8,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Kino VR</title>
 
-<!-- Biblioteka MEGA SDK do obsługi linków mega.nz -->
-<script src="https://cdn.jsdelivr.net/npm/megajs@1.1.0/dist/mega.min.js"></script>
+<!-- FIX: MEGAJS v1 UMD (oficjalna wersja przeglądarkowa) -->
+<script src="https://unpkg.com/megajs@1/dist/main.browser-umd.js"></script>
 
 <!-- Biblioteka HLS.js do obsługi streamów HLS -->
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12/dist/hls.min.js"></script>
@@ -336,6 +336,7 @@
 
   .danger-btn:hover { background: rgba(255, 165, 0, 0.3); }
 </style>
+<base target="_blank">
 </head>
 <body>
 
@@ -374,7 +375,7 @@
       <h2>Zarządzanie Filmami</h2>
       <button id="close-stream-gui" class="close-btn">✕</button>
     </div>
-    
+
     <div class="gui-form">
       <input type="text" id="stream-url" placeholder="URL: .mp4, .m3u8, mega.nz, youtube.com, vimeo.com..." autocomplete="off" autocapitalize="off" spellcheck="false" />
       <input type="text" id="stream-title" placeholder="Tytuł filmu" autocomplete="off" />
