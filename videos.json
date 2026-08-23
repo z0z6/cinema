@@ -1,10 +1,10 @@
 [
   {
     "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-    "title": "Stream 1: Big Buck Bunny"
+    "title": "Big Buck Bunny"
   },
   {
     "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-    "title": "Stream 2: Elephants Dream"
+    "title": "Elephants Dream"
   }
 ]
