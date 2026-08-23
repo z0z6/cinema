@@ -132,4 +132,10 @@ body > canvas {
   text-align:center; 
   pointer-events:none;
   border:1px solid rgba(255,255,255,.15);
+  
+.gui-hint {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 8px;
+  line-height: 1.4;
 }
