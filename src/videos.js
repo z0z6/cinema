@@ -153,46 +153,30 @@ function updateScreenTexture(group, newTexture, title) {
   group.userData.title = title || group.userData.title;
 }
 
-// === Pobieranie pliku z MEGA (fix: Uint8Array zamiast Buffer) ===
+// === Pobieranie pliku z MEGA (FIX: nowa wersja MEGAJS + downloadBuffer) ===
 async function getMegaVideoUrl(megaUrl) {
   try {
     console.log('Pobieranie z MEGA:', megaUrl);
 
+    // FIX: UMD wersja ustawia window.mega
+    const mega = window.mega;
     if (typeof mega === 'undefined' || !mega.File) {
-      throw new Error('Biblioteka MEGA (megajs) nie jest załadowana. Sprawdź połączenie internetowe.');
+      throw new Error('Biblioteka MEGA (megajs) nie jest załadowana. Sprawdź połączenie internetowe i czy skrypt MEGA się wczytał.');
     }
 
     const file = mega.File.fromURL(megaUrl);
     await file.loadAttributes();
+    console.log('MEGA atrybuty załadowane:', file.name, 'rozmiar:', file.size);
 
-    const buffer = await new Promise((resolve, reject) => {
-      const chunks = [];
-      const stream = file.download();
-
-      stream.on('data', (chunk) => {
-        chunks.push(chunk);
-      });
-
-      stream.on('end', () => {
-        // FIX: Uint8Array zamiast Buffer (Node.js only)
-        let totalLength = 0;
-        for (const chunk of chunks) totalLength += chunk.length;
-        const result = new Uint8Array(totalLength);
-        let offset = 0;
-        for (const chunk of chunks) {
-          result.set(chunk, offset);
-          offset += chunk.length;
-        }
-        resolve(result);
-      });
-
-      stream.on('error', reject);
-    });
+    // FIX: użyj downloadBuffer() zamiast ręcznego streamowania
+    // W przeglądarce zwraca Uint8Array (nie Node.js Buffer)
+    const buffer = await file.downloadBuffer();
+    console.log('MEGA plik pobrany, rozmiar:', buffer.byteLength);
 
     const blob = new Blob([buffer], { type: 'video/mp4' });
     const blobUrl = URL.createObjectURL(blob);
 
-    console.log('MEGA plik pobrany, Blob URL:', blobUrl);
+    console.log('MEGA Blob URL utworzony:', blobUrl);
     return blobUrl;
 
   } catch (error) {
