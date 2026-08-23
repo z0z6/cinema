@@ -3,6 +3,7 @@ import { buildRoom } from './room.js';
 import { createVideoGroups, disposeVideos } from './videos.js';
 import { CardboardMode } from './cardboard.js';
 
+// === Inicjalizacja sceny ===
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0a0a);
 scene.fog = new THREE.Fog(0x0a0a0a, 10, 25);
@@ -13,20 +14,22 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.8; // Ciemniej dla efektu kinowego
+renderer.toneMappingExposure = 0.8;
 document.body.appendChild(renderer.domElement);
 
 renderer.domElement.style.display = 'none';
 
-// Statyczny obserwator na środku sali
+// === Statyczny obserwator na środku sali ===
 const rig = new THREE.Group();
 scene.add(rig);
 rig.add(camera);
-rig.position.set(0, 0, 0); // Środek sali
-camera.position.set(0, 1.65, 0); // Wysokość oczu
+rig.position.set(0, 0, 0);
+camera.position.set(0, 1.65, 0);
 
+// === Budowa sali ===
 const { floorMesh } = buildRoom(scene);
 
+// === Zarządzanie filmami ===
 let interactiveVideos = [];
 let currentStreams = [];
 
@@ -35,8 +38,9 @@ async function loadStreams() {
   if (saved) {
     try {
       currentStreams = JSON.parse(saved);
+      console.log('Wczytano streamy z LocalStorage');
     } catch (e) {
-      console.error('Błąd parsowania streamów', e);
+      console.error('Błąd parsowania streamów z LocalStorage', e);
     }
   }
 
@@ -45,8 +49,10 @@ async function loadStreams() {
       const res = await fetch('videos.json', { cache: 'no-store' });
       if (res.ok) {
         currentStreams = await res.json();
+        console.log('Wczytano domyślne streamy z videos.json');
       }
     } catch (err) {
+      console.warn('Nie znaleziono videos.json, używam awaryjnych linków.');
       currentStreams = [
         { url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', title: 'Film 1' },
         { url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', title: 'Film 2' }
@@ -55,6 +61,7 @@ async function loadStreams() {
   }
   
   updateSceneVideos();
+  renderStreamList();
 }
 
 function updateSceneVideos() {
@@ -64,21 +71,111 @@ function updateSceneVideos() {
 
 loadStreams();
 
+// === Kontrolki i VR ===
 const clock = new THREE.Clock();
 const raycaster = new THREE.Raycaster();
 
 const cardboard = new CardboardMode(renderer, camera);
 let inVR = false;
 
+// === Sprawdź urządzenie ===
+const isMobileDevice = /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
 const vrBtn = document.getElementById('start-vr');
 
-// Sprawdź czy urządzenie mobilne
-const isMobileDevice = /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
 if (!isMobileDevice) {
   vrBtn.disabled = true;
   vrBtn.querySelector('span').textContent = 'VR dostępne tylko na urządzeniach mobilnych';
 }
 
+// === Obsługa GUI ===
+const guiPanel = document.getElementById('stream-gui-panel');
+const streamListEl = document.getElementById('stream-list');
+
+// Przyciski otwierające GUI (na ekranie startowym i w HUD)
+document.getElementById('open-stream-gui-intro')?.addEventListener('click', () => {
+  guiPanel.classList.remove('hidden');
+  renderStreamList();
+});
+
+document.getElementById('open-stream-gui')?.addEventListener('click', () => {
+  guiPanel.classList.remove('hidden');
+  renderStreamList();
+});
+
+document.getElementById('close-stream-gui').addEventListener('click', () => {
+  guiPanel.classList.add('hidden');
+});
+
+function renderStreamList() {
+  streamListEl.innerHTML = '';
+  currentStreams.forEach((stream, index) => {
+    const li = document.createElement('li');
+    li.className = 'stream-item';
+    li.innerHTML = `
+      <span title="${stream.title}: ${stream.url}">${index + 1}. ${stream.title}</span>
+      <button class="remove-stream-btn" data-index="${index}">Usuń</button>
+    `;
+    streamListEl.appendChild(li);
+  });
+
+  document.querySelectorAll('.remove-stream-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      currentStreams.splice(idx, 1);
+      saveAndApplyStreams();
+    });
+  });
+}
+
+function saveAndApplyStreams() {
+  localStorage.setItem('metaverse_streams', JSON.stringify(currentStreams));
+  updateSceneVideos();
+  renderStreamList();
+}
+
+document.getElementById('add-stream-btn').addEventListener('click', () => {
+  const urlInput = document.getElementById('stream-url');
+  const titleInput = document.getElementById('stream-title');
+  
+  const url = urlInput.value.trim();
+  const title = titleInput.value.trim() || 'Nowy Film';
+
+  if (!url) {
+    alert('Proszę podać adres URL filmu.');
+    return;
+  }
+
+  // Walidacja URL
+  const isValidUrl = url.startsWith('http://') || url.startsWith('https://');
+  const isMega = url.includes('mega.nz') || url.includes('mega.co.nz');
+  const isDirectVideo = /\.(mp4|webm|m3u8|mov)(\?|$)/i.test(url);
+
+  if (!isValidUrl) {
+    alert('Nieprawidłowy format URL. Link musi zaczynać się od http:// lub https://');
+    return;
+  }
+
+  if (!isMega && !isDirectVideo) {
+    if (!confirm('Link nie wygląda na bezpośredni plik wideo ani MEGA. Czy na pewno chcesz go dodać?')) {
+      return;
+    }
+  }
+
+  currentStreams.push({ url, title });
+  urlInput.value = '';
+  titleInput.value = '';
+  saveAndApplyStreams();
+});
+
+document.getElementById('reset-streams-btn').addEventListener('click', () => {
+  if (confirm('Czy na pewno chcesz usunąć własne filmy i przywrócić domyślne z videos.json?')) {
+    localStorage.removeItem('metaverse_streams');
+    currentStreams = [];
+    loadStreams();
+  }
+});
+
+// === Start VR ===
 vrBtn.addEventListener('click', async () => {
   if (vrBtn.disabled) return;
   
@@ -108,7 +205,7 @@ document.getElementById('exit-vr').addEventListener('click', () => {
   renderer.domElement.style.display = 'none';
 });
 
-// Pokazywanie tytułu filmu na który patrzy użytkownik
+// === Pokazywanie tytułu filmu ===
 function updateCaption() {
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
@@ -129,6 +226,7 @@ function updateCaption() {
   }
 }
 
+// === Pętla animacji ===
 function animate() {
   const dt = Math.min(clock.getDelta(), 0.1);
   
@@ -140,6 +238,7 @@ function animate() {
 
 renderer.setAnimationLoop(animate);
 
+// === Obsługa resize ===
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   if (inVR) {
