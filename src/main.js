@@ -91,7 +91,19 @@ if (!isMobileDevice) {
 const guiPanel = document.getElementById('stream-gui-panel');
 const streamListEl = document.getElementById('stream-list');
 
-// Przyciski otwierające GUI (na ekranie startowym i w HUD)
+// Funkcja pomocnicza do wykrywania typu URL
+function detectUrlType(url) {
+  if (!url) return 'unknown';
+  if (url.includes('mega.nz') || url.includes('mega.co.nz')) return 'MEGA';
+  if (/youtube\.com\/watch|youtu\.be\/|youtube\.com\/embed/i.test(url)) return 'YouTube';
+  if (/vimeo\.com\/\d+/i.test(url)) return 'Vimeo';
+  if (/dailymotion\.com\/video\//i.test(url)) return 'Dailymotion';
+  if (/twitch\.tv\//i.test(url)) return 'Twitch';
+  if (/\.(m3u8|ts)(\?|$)/i.test(url)) return 'HLS';
+  if (/\.(mp4|webm|ogg|mov)(\?|$)/i.test(url)) return 'Video';
+  return 'Inne';
+}
+
 document.getElementById('open-stream-gui-intro')?.addEventListener('click', () => {
   guiPanel.classList.remove('hidden');
   renderStreamList();
@@ -111,8 +123,10 @@ function renderStreamList() {
   currentStreams.forEach((stream, index) => {
     const li = document.createElement('li');
     li.className = 'stream-item';
+    const type = detectUrlType(stream.url);
     li.innerHTML = `
       <span title="${stream.title}: ${stream.url}">${index + 1}. ${stream.title}</span>
+      <span class="stream-type">${type}</span>
       <button class="remove-stream-btn" data-index="${index}">Usuń</button>
     `;
     streamListEl.appendChild(li);
@@ -145,20 +159,23 @@ document.getElementById('add-stream-btn').addEventListener('click', () => {
     return;
   }
 
-  // Walidacja URL
   const isValidUrl = url.startsWith('http://') || url.startsWith('https://');
-  const isMega = url.includes('mega.nz') || url.includes('mega.co.nz');
-  const isDirectVideo = /\.(mp4|webm|m3u8|mov)(\?|$)/i.test(url);
+  const type = detectUrlType(url);
+  const isIframeType = ['YouTube', 'Vimeo', 'Dailymotion', 'Twitch'].includes(type);
 
   if (!isValidUrl) {
     alert('Nieprawidłowy format URL. Link musi zaczynać się od http:// lub https://');
     return;
   }
 
-  if (!isMega && !isDirectVideo) {
-    if (!confirm('Link nie wygląda na bezpośredni plik wideo ani MEGA. Czy na pewno chcesz go dodać?')) {
+  if (type === 'unknown') {
+    if (!confirm('Link nie wygląda na obsługiwany format. Czy na pewno chcesz go dodać?\n\nObsługiwane:\n• Bezpośrednie linki (.mp4, .webm)\n• MEGA.nz\n• YouTube\n• Vimeo\n• Dailymotion\n• Twitch\n• HLS streams (.m3u8)')) {
       return;
     }
+  }
+
+  if (isIframeType) {
+    alert('⚠️ Uwaga: Filmy z serwisów streamingowych (' + type + ') mogą nie działać w trybie VR ze względu na ograniczenia technologii iframe. Zostanie wyświetlony placeholder z tytułem filmu.\n\nAby oglądać te filmy w pełni, otwórz link bezpośrednio w przeglądarce.');
   }
 
   currentStreams.push({ url, title });
