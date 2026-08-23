@@ -63,83 +63,44 @@ function getTwitchEmbedUrl(url) {
   return null;
 }
 
-// === Pobieranie pliku z MEGA ===
-async function getMegaVideoUrl(megaUrl) {
-  try {
-    console.log('Pobieranie z MEGA:', megaUrl);
-    
-    const file = mega.File.fromURL(megaUrl);
-    await file.loadAttributes();
-    
-    const buffer = await new Promise((resolve, reject) => {
-      const chunks = [];
-      const stream = file.download();
-      
-      stream.on('data', (chunk) => {
-        chunks.push(chunk);
-      });
-      
-      stream.on('end', () => {
-        resolve(Buffer.concat(chunks));
-      });
-      
-      stream.on('error', reject);
-    });
-
-    const blob = new Blob([buffer], { type: 'video/mp4' });
-    const blobUrl = URL.createObjectURL(blob);
-    
-    console.log('MEGA plik pobrany, Blob URL:', blobUrl);
-    return blobUrl;
-    
-  } catch (error) {
-    console.error('Błąd pobierania z MEGA:', error);
-    throw error;
-  }
-}
-
-// === Tworzenie ekranu z iframe (YouTube, Vimeo, Dailymotion, Twitch) ===
-function buildIframeScreen(group, embedUrl, title, maxWidth, maxHeight) {
+// === Tworzenie placeholdera na ekranie (natychmiast) ===
+function createPlaceholderScreen(group, title, subtitle, color = '#1a1a2e', accent = '#64c8ff', maxWidth = 8, maxHeight = 5) {
   const canvas = document.createElement('canvas');
-  canvas.width = 1920;
-  canvas.height = 1080;
+  canvas.width = 1024;
+  canvas.height = 576;
   const ctx = canvas.getContext('2d');
-  
-  // Gradient tła
+
   const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  gradient.addColorStop(0, '#1a1a2e');
+  gradient.addColorStop(0, color);
   gradient.addColorStop(1, '#0f0f1e');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
+
   // Ikona odtwarzania
   ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
   ctx.beginPath();
-  ctx.arc(canvas.width / 2, canvas.height / 2 - 60, 100, 0, Math.PI * 2);
+  ctx.arc(canvas.width / 2, canvas.height / 2 - 40, 80, 0, Math.PI * 2);
   ctx.fill();
-  
+
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.moveTo(canvas.width / 2 - 30, canvas.height / 2 - 100);
-  ctx.lineTo(canvas.width / 2 - 30, canvas.height / 2 - 20);
-  ctx.lineTo(canvas.width / 2 + 50, canvas.height / 2 - 60);
+  ctx.moveTo(canvas.width / 2 - 20, canvas.height / 2 - 80);
+  ctx.lineTo(canvas.width / 2 - 20, canvas.height / 2);
+  ctx.lineTo(canvas.width / 2 + 40, canvas.height / 2 - 40);
   ctx.closePath();
   ctx.fill();
-  
-  // Tytuł
+
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 56px sans-serif';
+  ctx.font = 'bold 48px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText(title || 'Film', canvas.width / 2, canvas.height / 2 + 60);
-  
-  // Informacja o ograniczeniach
-  ctx.font = '28px sans-serif';
-  ctx.fillStyle = '#888888';
-  ctx.fillText('Serwis zewnętrzny - niedostępne w VR', canvas.width / 2, canvas.height / 2 + 120);
-  ctx.font = '24px sans-serif';
-  ctx.fillStyle = '#64c8ff';
-  ctx.fillText(embedUrl ? 'Kliknij aby otworzyć w przeglądarce' : '', canvas.width / 2, canvas.height / 2 + 160);
-  
+
+  if (subtitle) {
+    ctx.font = '28px sans-serif';
+    ctx.fillStyle = '#888888';
+    ctx.fillText(subtitle, canvas.width / 2, canvas.height / 2 + 110);
+  }
+
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
 
@@ -153,12 +114,12 @@ function buildIframeScreen(group, embedUrl, title, maxWidth, maxHeight) {
 
   const FRAME_DEPTH = 0.15;
   const FRAME_PAD = 0.25;
-  
+
   const frameGeo = new THREE.BoxGeometry(w + FRAME_PAD * 2, h + FRAME_PAD * 2, FRAME_DEPTH);
-  const frameMat = new THREE.MeshStandardMaterial({ 
-    color: 0x1a1a1a, 
-    roughness: 0.3, 
-    metalness: 0.7 
+  const frameMat = new THREE.MeshStandardMaterial({
+    color: 0x1a1a1a,
+    roughness: 0.3,
+    metalness: 0.7
   });
   const frame = new THREE.Mesh(frameGeo, frameMat);
   frame.position.z = -FRAME_DEPTH / 2;
@@ -166,34 +127,158 @@ function buildIframeScreen(group, embedUrl, title, maxWidth, maxHeight) {
 
   const screenMat = new THREE.MeshBasicMaterial({ map: texture });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(w, h), screenMat);
+  screen.name = 'screenMesh';
   screen.position.z = FRAME_DEPTH / 2 + 0.01;
   group.add(screen);
 
-  const screenLight = new THREE.PointLight(0x64c8ff, 10, 8, 2);
+  const screenLight = new THREE.PointLight(accent === '#ff4444' ? 0xff4444 : 0x64c8ff, 10, 8, 2);
   screenLight.position.set(0, 0, 2.5);
+  screenLight.name = 'screenLight';
   group.add(screenLight);
+
+  return { width: w, height: h, screenMesh: screen };
+}
+
+// === Aktualizacja tekstury ekranu ===
+function updateScreenTexture(group, newTexture, title) {
+  const screen = group.getObjectByName('screenMesh');
+  if (screen && screen.material) {
+    const oldMap = screen.material.map;
+    screen.material.map = newTexture;
+    screen.material.needsUpdate = true;
+    if (oldMap && oldMap.image && oldMap.image.tagName !== 'VIDEO') {
+      oldMap.dispose();
+    }
+  }
+  group.userData.title = title || group.userData.title;
+}
+
+// === Pobieranie pliku z MEGA (fix: Uint8Array zamiast Buffer) ===
+async function getMegaVideoUrl(megaUrl) {
+  try {
+    console.log('Pobieranie z MEGA:', megaUrl);
+
+    if (typeof mega === 'undefined' || !mega.File) {
+      throw new Error('Biblioteka MEGA (megajs) nie jest załadowana. Sprawdź połączenie internetowe.');
+    }
+
+    const file = mega.File.fromURL(megaUrl);
+    await file.loadAttributes();
+
+    const buffer = await new Promise((resolve, reject) => {
+      const chunks = [];
+      const stream = file.download();
+
+      stream.on('data', (chunk) => {
+        chunks.push(chunk);
+      });
+
+      stream.on('end', () => {
+        // FIX: Uint8Array zamiast Buffer (Node.js only)
+        let totalLength = 0;
+        for (const chunk of chunks) totalLength += chunk.length;
+        const result = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of chunks) {
+          result.set(chunk, offset);
+          offset += chunk.length;
+        }
+        resolve(result);
+      });
+
+      stream.on('error', reject);
+    });
+
+    const blob = new Blob([buffer], { type: 'video/mp4' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    console.log('MEGA plik pobrany, Blob URL:', blobUrl);
+    return blobUrl;
+
+  } catch (error) {
+    console.error('Błąd pobierania z MEGA:', error);
+    throw error;
+  }
+}
+
+// === Tworzenie ekranu z iframe (YouTube, Vimeo, Dailymotion, Twitch) ===
+function buildIframeScreen(group, embedUrl, title, maxWidth, maxHeight) {
+  createPlaceholderScreen(
+    group,
+    title || 'Film',
+    'Serwis zewnętrzny - niedostępne w VR',
+    '#1a1a2e',
+    '#64c8ff',
+    maxWidth,
+    maxHeight
+  );
 
   group.userData.isVideo = false;
   group.userData.isIframe = true;
   group.userData.embedUrl = embedUrl;
   group.userData.title = title || 'Film';
-  
+
   console.log('Utworzono placeholder dla iframe:', embedUrl);
 }
 
 // === Tworzenie ekranu z HLS stream ===
 function buildHlsScreen(group, hlsUrl, title, maxWidth, maxHeight) {
+  const { screenMesh } = createPlaceholderScreen(
+    group,
+    title || 'Stream HLS',
+    'Ładowanie streamu...',
+    '#1a1a2e',
+    '#64c8ff',
+    maxWidth,
+    maxHeight
+  );
+
   const video = document.createElement('video');
   video.crossOrigin = 'anonymous';
   video.loop = true;
   video.muted = true;
   video.playsInline = true;
 
+  // Obsługa błędów wideo
+  video.onerror = (e) => {
+    console.error('Błąd elementu <video> (HLS):', video.error);
+    let msg = 'Błąd odtwarzania HLS';
+    if (video.error) {
+      switch (video.error.code) {
+        case 1: msg = 'Przerwane pobieranie (NETWORK_EMPTY)'; break;
+        case 2: msg = 'Błąd sieci - sprawdź CORS/URL'; break;
+        case 3: msg = 'Błąd dekodowania - uszkodzony plik?'; break;
+        case 4: msg = 'Format nieobsługiwany'; break;
+      }
+    }
+    showErrorOnScreen(group, msg, title);
+  };
+
   if (video.canPlayType('application/vnd.apple.mpegurl')) {
     video.src = hlsUrl;
     video.play().catch(e => console.warn('Autoodtwarzanie HLS zablokowane:', e));
   } else if (window.Hls && window.Hls.isSupported()) {
     const hls = new window.Hls();
+
+    // FIX: obsługa błędów HLS.js
+    hls.on(window.Hls.Events.ERROR, (event, data) => {
+      console.error('Błąd HLS.js:', data);
+      if (data.fatal) {
+        let msg = 'Błąd HLS';
+        switch (data.type) {
+          case window.Hls.ErrorTypes.NETWORK_ERROR:
+            msg = 'Błąd sieci HLS - sprawdź URL i CORS';
+            break;
+          case window.Hls.ErrorTypes.MEDIA_ERROR:
+            msg = 'Błąd mediów HLS - uszkodzony stream?';
+            break;
+          default:
+            msg = 'Krytyczny błąd HLS';
+        }
+        showErrorOnScreen(group, msg, title);
+      }
+    });
+
     hls.loadSource(hlsUrl);
     hls.attachMedia(video);
     hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
@@ -202,42 +287,14 @@ function buildHlsScreen(group, hlsUrl, title, maxWidth, maxHeight) {
     group.userData.hls = hls;
   } else {
     console.error('HLS nie jest obsługiwany w tej przeglądarce');
+    showErrorOnScreen(group, 'HLS nieobsługiwany w tej przeglądarce', title);
     return;
   }
 
-  const texture = new THREE.VideoTexture(video);
-  texture.colorSpace = THREE.SRGBColorSpace;
-
   video.onloadedmetadata = () => {
-    const aspect = video.videoWidth / video.videoHeight || 16 / 9;
-    let w = maxWidth;
-    let h = w / aspect;
-    if (h > maxHeight) {
-      h = maxHeight;
-      w = h * aspect;
-    }
-
-    const FRAME_DEPTH = 0.15;
-    const FRAME_PAD = 0.25;
-    
-    const frameGeo = new THREE.BoxGeometry(w + FRAME_PAD * 2, h + FRAME_PAD * 2, FRAME_DEPTH);
-    const frameMat = new THREE.MeshStandardMaterial({ 
-      color: 0x1a1a1a, 
-      roughness: 0.3, 
-      metalness: 0.7 
-    });
-    const frame = new THREE.Mesh(frameGeo, frameMat);
-    frame.position.z = -FRAME_DEPTH / 2;
-    group.add(frame);
-
-    const screenMat = new THREE.MeshBasicMaterial({ map: texture });
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(w, h), screenMat);
-    screen.position.z = FRAME_DEPTH / 2 + 0.01;
-    group.add(screen);
-
-    const screenLight = new THREE.PointLight(0xffffff, 15, 8, 2);
-    screenLight.position.set(0, 0, 2.5);
-    group.add(screenLight);
+    const texture = new THREE.VideoTexture(video);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    updateScreenTexture(group, texture, title);
   };
 
   group.userData.isVideo = true;
@@ -248,33 +305,26 @@ function buildHlsScreen(group, hlsUrl, title, maxWidth, maxHeight) {
 
 // === Tworzenie ekranu z bezpośredniego pliku wideo ===
 async function buildVideoScreen(group, videoUrl, title, maxWidth, maxHeight) {
+  const { screenMesh } = createPlaceholderScreen(
+    group,
+    title || 'Film',
+    'Ładowanie wideo...',
+    '#1a1a2e',
+    '#64c8ff',
+    maxWidth,
+    maxHeight
+  );
+
   let actualVideoUrl = videoUrl;
-  
+
   if (isMegaUrl(videoUrl)) {
     try {
       actualVideoUrl = await getMegaVideoUrl(videoUrl);
     } catch (error) {
       console.error('Nie udało się pobrać pliku z MEGA:', error);
-      const canvas = document.createElement('canvas');
-      canvas.width = 512;
-      canvas.height = 512;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#1a1a1a';
-      ctx.fillRect(0, 0, 512, 512);
-      ctx.fillStyle = '#ff4444';
-      ctx.font = 'bold 32px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Błąd pobierania', 256, 240);
-      ctx.fillText('z MEGA', 256, 280);
-      
-      const errorTexture = new THREE.CanvasTexture(canvas);
-      const errorMat = new THREE.MeshBasicMaterial({ map: errorTexture });
-      const errorScreen = new THREE.Mesh(new THREE.PlaneGeometry(maxWidth, maxHeight), errorMat);
-      errorScreen.position.z = 0.1;
-      group.add(errorScreen);
-      
+      showErrorOnScreen(group, 'Błąd pobierania z MEGA: ' + (error.message || 'nieznany'), title);
       group.userData.isVideo = false;
-      group.userData.title = title + ' (BŁĄD)';
+      group.userData.title = (title || 'Film') + ' (BŁĄD MEGA)';
       return;
     }
   }
@@ -285,48 +335,68 @@ async function buildVideoScreen(group, videoUrl, title, maxWidth, maxHeight) {
   video.loop = true;
   video.muted = true;
   video.playsInline = true;
-  
+
+  // FIX: obsługa błędów wideo
+  video.onerror = (e) => {
+    console.error('Błąd elementu <video>:', video.error, 'src:', actualVideoUrl);
+    let msg = 'Błąd ładowania wideo';
+    if (video.error) {
+      switch (video.error.code) {
+        case 1: msg = 'Przerwane pobieranie'; break;
+        case 2: msg = 'Błąd sieci (CORS/404/timeout)'; break;
+        case 3: msg = 'Błąd dekodowania'; break;
+        case 4: msg = 'Format nieobsługiwany'; break;
+      }
+    }
+    showErrorOnScreen(group, msg, title);
+  };
+
   video.play().catch(e => console.warn('Autoodtwarzanie wideo zablokowane:', e));
 
   const texture = new THREE.VideoTexture(video);
   texture.colorSpace = THREE.SRGBColorSpace;
 
   video.onloadedmetadata = () => {
-    const aspect = video.videoWidth / video.videoHeight;
-    let w = maxWidth;
-    let h = w / aspect;
-    if (h > maxHeight) {
-      h = maxHeight;
-      w = h * aspect;
-    }
-
-    const FRAME_DEPTH = 0.15;
-    const FRAME_PAD = 0.25;
-    
-    const frameGeo = new THREE.BoxGeometry(w + FRAME_PAD * 2, h + FRAME_PAD * 2, FRAME_DEPTH);
-    const frameMat = new THREE.MeshStandardMaterial({ 
-      color: 0x1a1a1a, 
-      roughness: 0.3, 
-      metalness: 0.7 
-    });
-    const frame = new THREE.Mesh(frameGeo, frameMat);
-    frame.position.z = -FRAME_DEPTH / 2;
-    group.add(frame);
-
-    const screenMat = new THREE.MeshBasicMaterial({ map: texture });
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(w, h), screenMat);
-    screen.position.z = FRAME_DEPTH / 2 + 0.01;
-    group.add(screen);
-
-    const screenLight = new THREE.PointLight(0xffffff, 15, 8, 2);
-    screenLight.position.set(0, 0, 2.5);
-    group.add(screenLight);
+    updateScreenTexture(group, texture, title);
   };
 
   group.userData.isVideo = true;
   group.userData.videoElement = video;
   group.userData.title = title || 'Film';
   group.userData.originalUrl = videoUrl;
+}
+
+// === Wyświetlanie błędu na ekranie (Canvas) ===
+function showErrorOnScreen(group, message, title) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 576;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#1a0505';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = '#ff4444';
+  ctx.font = 'bold 48px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('⚠ Błąd', canvas.width / 2, canvas.height / 2 - 40);
+
+  ctx.fillStyle = '#ff8888';
+  ctx.font = '28px sans-serif';
+  ctx.fillText(message, canvas.width / 2, canvas.height / 2 + 20);
+
+  ctx.fillStyle = '#888888';
+  ctx.font = '24px sans-serif';
+  ctx.fillText(title || '', canvas.width / 2, canvas.height / 2 + 70);
+
+  const errorTexture = new THREE.CanvasTexture(canvas);
+  errorTexture.colorSpace = THREE.SRGBColorSpace;
+  updateScreenTexture(group, errorTexture, (title || 'Film') + ' (BŁĄD)');
+
+  const light = group.getObjectByName('screenLight');
+  if (light) {
+    light.color.setHex(0xff4444);
+  }
 }
 
 // === Główna funkcja tworząca ekrany ===
@@ -340,11 +410,11 @@ export function createVideoGroups(scene, streamsData) {
     group.rotation.y = slot.rotY;
 
     const entry = streamsData[i] || streamsData[0];
-    
-    if (entry && entry.url) {
-      const url = entry.url;
+
+    if (entry && entry.url && entry.url.trim() !== '') {
+      const url = entry.url.trim();
       const title = entry.title;
-      
+
       if (isYouTubeUrl(url)) {
         const embedUrl = getYouTubeEmbedUrl(url);
         if (embedUrl) {
@@ -371,7 +441,15 @@ export function createVideoGroups(scene, streamsData) {
         buildVideoScreen(group, url, title, slot.maxWidth, slot.maxHeight || 5);
       } else {
         console.warn('Nieobsługiwany typ URL:', url);
+        createPlaceholderScreen(group, title || 'Nieznany', 'Nieobsługiwany format URL', '#1a1a2e', '#ffaa00', slot.maxWidth, slot.maxHeight || 5);
+        group.userData.isVideo = false;
+        group.userData.title = title || 'Nieznany';
       }
+    } else {
+      // Pusty slot - placeholder
+      createPlaceholderScreen(group, 'Brak filmu', 'Dodaj film w panelu zarządzania', '#1a1a2e', '#444444', slot.maxWidth, slot.maxHeight || 5);
+      group.userData.isVideo = false;
+      group.userData.title = 'Brak filmu';
     }
 
     interactive.push(group);
@@ -388,7 +466,7 @@ export function disposeVideos(scene, videoGroups) {
       group.userData.hls.destroy();
       group.userData.hls = null;
     }
-    
+
     if (group.userData.videoElement) {
       group.userData.videoElement.pause();
       if (group.userData.originalUrl && isMegaUrl(group.userData.originalUrl)) {
@@ -400,7 +478,7 @@ export function disposeVideos(scene, videoGroups) {
       group.userData.videoElement.src = '';
       group.userData.videoElement = null;
     }
-    
+
     group.traverse((child) => {
       if (child.isMesh) {
         if (child.material.map) child.material.map.dispose();
