@@ -13,7 +13,6 @@ export function buildRoom(scene) {
   const wallMatSide = loadWallMaterial(DEPTH / 6, H / 3);
   const ceilMat = loadCeilingMaterial(totalWidth / 4, DEPTH / 4);
 
-  // Podłoga i sufit
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(totalWidth, DEPTH), floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.name = 'floor';
@@ -24,7 +23,6 @@ export function buildRoom(scene) {
   ceiling.position.y = H;
   scene.add(ceiling);
 
-  // Ściany zewnętrzne
   const northWall = new THREE.Mesh(new THREE.PlaneGeometry(totalWidth, H), wallMat);
   northWall.position.set(0, H / 2, -DEPTH / 2);
   northWall.name = 'wall';
@@ -52,7 +50,6 @@ export function buildRoom(scene) {
   eastWall.material.side = THREE.DoubleSide;
   scene.add(eastWall);
 
-  // Oświetlenie
   scene.add(new THREE.AmbientLight(0xffffff, 0.75));
   scene.add(new THREE.HemisphereLight(0xffffff, 0x3a3a42, 0.55));
 
@@ -67,7 +64,6 @@ export function buildRoom(scene) {
     scene.add(fill);
   }
 
-  // Dywan na środku
   const rugMat = loadRugMaterial(4, 3);
   const rug = new THREE.Mesh(new THREE.PlaneGeometry(totalWidth * 0.6, DEPTH * 0.6), rugMat);
   rug.rotation.x = -Math.PI / 2;
@@ -77,11 +73,10 @@ export function buildRoom(scene) {
   return { floorMesh: floor };
 }
 
-// Generuje tylko DWA duże sloty na przeciwległych ścianach
 export function generateWallSlots() {
   const slots = [];
   const margin = 0.1;
-  const eyeY = 2.2; // Wyżej, aby duże ekrany były dobrze wycentrowane
+  const eyeY = 2.2; 
   
   // Północna ściana
   slots.push({ pos: [0, eyeY, -DEPTH / 2 + margin], rotY: 0, maxWidth: 10, maxHeight: 5 });
