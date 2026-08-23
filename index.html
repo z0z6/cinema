@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Galeria — Metavers</title>
 <link rel="stylesheet" href="style.css">
+
 <script type="importmap">
 {
   "imports": {
@@ -13,8 +14,8 @@
   }
 }
 </script>
+
 <style>
-  /* Tło pod spodem (gogle VR / cząsteczki) */
   #canvas-container {
     position: fixed;
     top: 0;
@@ -24,7 +25,6 @@
     z-index: 0;
     pointer-events: none;
   }
-  /* Panel startowy nad tłem */
   #intro {
     position: fixed;
     inset: 0;
@@ -38,13 +38,12 @@
 </head>
 <body>
 
-<!-- Kontener na tło 3D -->
 <div id="canvas-container"></div>
 
 <div id="intro">
   <div class="intro-panel">
-    <h1>Galeria</h1>
-    <p>Wirtualna przestrzeń wystawowa — chodź, zwiedzaj, dodawaj własne prace.</p>
+    <h1>Galeria Wideo</h1>
+    <p>Wirtualna przestrzeń z dużymi ekranami do odtwarzania streamów wideo.</p>
     <div class="intro-row" id="intro-buttons">
       <button id="start-fpp" class="mode-btn">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -59,16 +58,15 @@
         <span>VR</span>
       </button>
     </div>
-    <p class="hint">W A S D — ruch &nbsp;|&nbsp; mysz — rozglądanie (kliknij ekran, by zablokować kursor) &nbsp;|&nbsp; SHIFT — bieg</p>
-    <p class="hint" style="margin-top: 15px; font-size: 0.85em; opacity: 0.6;">
-      <a href="admin.html" style="color: inherit; text-decoration: none; border-bottom: 1px dotted currentColor;">⚙️ Dostosuj tło (Panel Admina)</a>
-    </p>
+    <p class="hint">W A S D — ruch &nbsp;|&nbsp; mysz — rozglądanie &nbsp;|&nbsp; SHIFT — bieg &nbsp;|&nbsp; Kliknij w ekran, aby włączyć/wyciszyć dźwięk</p>
   </div>
 </div>
 
 <div id="hud" class="hidden">
   <button id="toggle-mode" class="hud-btn">🔄 Zmień widok</button>
+  <button id="open-stream-gui" class="hud-btn" style="top: 60px;">⚙️ Streamy</button>
   <button id="exit-vr" class="hud-btn hidden" style="right:auto;left:16px;">✕ Wyjdź z VR</button>
+  
   <div id="crosshair"></div>
   <div id="joystick-base" class="hidden">
     <div id="joystick-knob"></div>
@@ -77,32 +75,53 @@
   <div id="artwork-caption" class="hidden"></div>
 </div>
 
-<!-- Inicjalizacja tła: gogle VR (wireframe, obracające się) -->
+<!-- PANEL GUI DO ZARZĄDZANIA STREAMAMI -->
+<div id="stream-gui-panel" class="hidden">
+  <div class="gui-panel-content">
+    <div class="gui-header">
+      <h2>Zarządzanie Streamami</h2>
+      <button id="close-stream-gui" class="close-btn">✕</button>
+    </div>
+    
+    <div class="gui-form">
+      <input type="text" id="stream-url" placeholder="Adres URL streama (np. .mp4, .m3u8)" />
+      <input type="text" id="stream-title" placeholder="Tytuł streama" />
+      <button id="add-stream-btn" class="action-btn">➕ Dodaj Stream</button>
+    </div>
+
+    <div class="gui-list-container">
+      <h3>Aktywne streamy (maks. 2 ekrany):</h3>
+      <ul id="stream-list"></ul>
+    </div>
+
+    <div class="gui-footer">
+      <button id="reset-streams-btn" class="danger-btn">🔄 Przywróć domyślne (z videos.json)</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
-import { Config } from './js/config.js';
-import { init as initVRHeadsetBg } from './js/vr-headset-bg.js';
+  import { Config } from './js/config.js';
+  import { init } from './js/particles.js';
 
-async function loadConfigAndInit() {
-  try {
-    const response = await fetch('config.json');
-    if (response.ok) {
-      const jsonConfig = await response.json();
-      for (const key in jsonConfig) {
-        Config.set(key, jsonConfig[key]);
+  async function loadConfigAndInit() {
+    try {
+      const response = await fetch('config.json');
+      if (response.ok) {
+        const jsonConfig = await response.json();
+        for (const key in jsonConfig) {
+          Config.set(key, jsonConfig[key]);
+        }
       }
+    } catch (e) {
+      console.warn('Nie udało się załadować config.json, używam ustawień domyślnych.', e);
     }
-  } catch (e) {
-    console.warn('Nie udało się załadować config.json, używam ustawień domyślnych.', e);
+    document.body.style.background = Config.get('bgColor');
+    init('canvas-container');
   }
-  document.body.style.background = Config.get('bgColor');
-  initVRHeadsetBg('canvas-container');
-}
-
-document.addEventListener('DOMContentLoaded', loadConfigAndInit);
+  document.addEventListener('DOMContentLoaded', loadConfigAndInit);
 </script>
 
-<!-- Główna logika metaversum -->
 <script type="module" src="src/main.js"></script>
-
 </body>
 </html>
