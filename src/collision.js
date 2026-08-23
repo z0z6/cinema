@@ -1,5 +1,5 @@
 export const DEPTH = 16;
-export const ROOM_WIDTHS = [24]; // Jedna duża sala główna (szerokość 24m)
+export const ROOM_WIDTHS = [24]; // Jedna duża sala główna
 export const DOOR_HALF_WIDTH = 0;
 export const WALL_THICKNESS = 0;
 
