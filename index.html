@@ -11,6 +11,9 @@
 <!-- Biblioteka MEGA SDK do obsługi linków mega.nz -->
 <script src="https://cdn.jsdelivr.net/npm/megajs@1.1.0/dist/mega.min.js"></script>
 
+<!-- Biblioteka HLS.js do obsługi streamów HLS -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12/dist/hls.min.js"></script>
+
 <script type="importmap">
 {
   "imports": {
@@ -21,7 +24,6 @@
 </script>
 
 <style>
-  /* Reset i bazowe style */
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     width: 100%;
@@ -44,7 +46,6 @@
     z-index: 1;
   }
 
-  /* Ekran startowy - szare tło */
   #intro {
     position: fixed;
     inset: 0;
@@ -101,10 +102,7 @@
     line-height: 1.3;
   }
 
-  .mode-btn .icon {
-    width: 32px;
-    height: 32px;
-  }
+  .mode-btn .icon { width: 32px; height: 32px; }
 
   .mode-btn:hover {
     background: rgba(255, 255, 255, 0.2);
@@ -123,7 +121,6 @@
     line-height: 1.4;
   }
 
-  /* HUD w VR */
   #hud {
     position: fixed;
     inset: 0;
@@ -147,9 +144,7 @@
     -webkit-backdrop-filter: blur(8px);
   }
 
-  .hud-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-  }
+  .hud-btn:hover { background: rgba(255, 255, 255, 0.15); }
 
   #video-caption {
     position: absolute;
@@ -167,7 +162,6 @@
     border: 1px solid rgba(255, 255, 255, 0.15);
   }
 
-  /* Panel GUI do zarządzania filmami */
   #stream-gui-panel {
     position: fixed;
     inset: 0;
@@ -202,11 +196,7 @@
     padding-bottom: 10px;
   }
 
-  .gui-header h2 {
-    margin: 0;
-    font-size: 1.4rem;
-    font-weight: 600;
-  }
+  .gui-header h2 { margin: 0; font-size: 1.4rem; font-weight: 600; }
 
   .close-btn {
     background: none;
@@ -244,9 +234,7 @@
     background: rgba(255, 255, 255, 0.1);
   }
 
-  .gui-form input::placeholder {
-    color: rgba(255, 255, 255, 0.4);
-  }
+  .gui-form input::placeholder { color: rgba(255, 255, 255, 0.4); }
 
   .action-btn {
     padding: 12px;
@@ -305,6 +293,15 @@
     flex: 1;
   }
 
+  .stream-item .stream-type {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(100, 200, 255, 0.2);
+    color: #64c8ff;
+    flex-shrink: 0;
+  }
+
   .remove-stream-btn {
     background: rgba(255, 80, 80, 0.2);
     border: 1px solid rgba(255, 80, 80, 0.4);
@@ -342,12 +339,11 @@
 </head>
 <body>
 
-<!-- Ekran startowy -->
 <div id="intro">
   <div class="intro-panel">
     <h1>Kino VR</h1>
     <p>Statyczny obserwator w wirtualnej sali kinowej.<br>
-       Oglądaj filmy z MEGA.nz i innych źródeł.</p>
+       Oglądaj filmy z MEGA, YouTube, Vimeo i innych źródeł.</p>
     <button id="start-vr" class="mode-btn">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
         <rect x="2" y="7" width="20" height="10" rx="4.5"/>
@@ -366,14 +362,12 @@
   </div>
 </div>
 
-<!-- HUD w trybie VR -->
 <div id="hud" class="hidden">
   <button id="exit-vr" class="hud-btn">✕ Wyjdź z VR</button>
   <button id="open-stream-gui" class="hud-btn" style="top: 60px;">⚙️ Filmy</button>
   <div id="video-caption" class="hidden"></div>
 </div>
 
-<!-- Panel GUI do zarządzania filmami -->
 <div id="stream-gui-panel" class="hidden">
   <div class="gui-panel-content">
     <div class="gui-header">
@@ -382,10 +376,10 @@
     </div>
     
     <div class="gui-form">
-      <input type="text" id="stream-url" placeholder="URL: bezpośredni (.mp4) lub MEGA (mega.nz/file/...)" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <input type="text" id="stream-url" placeholder="URL: .mp4, .m3u8, mega.nz, youtube.com, vimeo.com..." autocomplete="off" autocapitalize="off" spellcheck="false" />
       <input type="text" id="stream-title" placeholder="Tytuł filmu" autocomplete="off" />
       <button id="add-stream-btn" class="action-btn">➕ Dodaj Film</button>
-      <p class="gui-hint">💡 Obsługiwane: bezpośrednie linki .mp4/.webm/.m3u8 oraz linki MEGA.nz (publiczne)</p>
+      <p class="gui-hint">💡 Obsługiwane: .mp4/.webm/.m3u8, MEGA.nz, YouTube, Vimeo, Dailymotion, Twitch</p>
     </div>
 
     <div class="gui-list-container">
@@ -399,7 +393,6 @@
   </div>
 </div>
 
-<!-- Główna logika aplikacji -->
 <script type="module" src="src/main.js"></script>
 
 </body>
