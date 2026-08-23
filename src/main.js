@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { buildRoom } from './room.js';
-import { loadVideos } from './videos.js';
-import { BOUNDS, OBSTACLES, resolveCollision, crossesSolidWall } from './collision.js';
+import { createVideoGroups, disposeVideos } from './videos.js';
+import { BOUNDS, resolveCollision, crossesSolidWall } from './collision.js';
 import { GalleryControls } from './controls.js';
 import { CardboardMode } from './cardboard.js';
 import { getActiveGamepad, applyGamepadMovement } from './gamepad.js';
@@ -29,10 +29,47 @@ rig.add(camera);
 const { floorMesh } = buildRoom(scene);
 
 let interactiveVideos = [];
-loadVideos(scene).then(list => { interactiveVideos = list; });
+let currentStreams = [];
+
+async function loadStreams() {
+  const saved = localStorage.getItem('metaverse_streams');
+  if (saved) {
+    try {
+      currentStreams = JSON.parse(saved);
+      console.log('Wczytano streamy z LocalStorage');
+    } catch (e) {
+      console.error('Błąd parsowania streamów z LocalStorage', e);
+    }
+  }
+
+  if (!currentStreams || currentStreams.length === 0) {
+    try {
+      const res = await fetch('videos.json', { cache: 'no-store' });
+      if (res.ok) {
+        currentStreams = await res.json();
+        console.log('Wczytano domyślne streamy z videos.json');
+      }
+    } catch (err) {
+      console.warn('Nie znaleziono videos.json, używam awaryjnych linków.');
+      currentStreams = [
+        { url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', title: 'Stream 1' },
+        { url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', title: 'Stream 2' }
+      ];
+    }
+  }
+  
+  updateSceneVideos();
+  renderStreamList();
+}
+
+function updateSceneVideos() {
+  disposeVideos(scene, interactiveVideos);
+  interactiveVideos = createVideoGroups(scene, currentStreams);
+}
+
+loadStreams();
 
 const controls = new GalleryControls(camera, renderer.domElement, scene);
-
 const clock = new THREE.Clock();
 const raycaster = new THREE.Raycaster();
 let dwell = 0;
@@ -40,14 +77,73 @@ const TELEPORT_DWELL = 2.2;
 
 const cardboard = new CardboardMode(renderer, camera);
 let inVR = false;
-
 const isMobileDevice = /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
-const vrBtn = document.getElementById('start-vr');
-if (!isMobileDevice) {
-  vrBtn.disabled = true;
-  vrBtn.classList.add('long-label');
-  vrBtn.querySelector('span').textContent = 'VR dostępne tylko w urządzeniach mobilnych';
+
+// --- OBSŁUGA GUI ---
+const guiPanel = document.getElementById('stream-gui-panel');
+const streamListEl = document.getElementById('stream-list');
+
+document.getElementById('open-stream-gui').addEventListener('click', () => {
+  guiPanel.classList.remove('hidden');
+  renderStreamList();
+});
+
+document.getElementById('close-stream-gui').addEventListener('click', () => {
+  guiPanel.classList.add('hidden');
+});
+
+function renderStreamList() {
+  streamListEl.innerHTML = '';
+  currentStreams.forEach((stream, index) => {
+    const li = document.createElement('li');
+    li.className = 'stream-item';
+    li.innerHTML = `
+      <span title="${stream.title}: ${stream.url}">${index + 1}. ${stream.title}</span>
+      <button class="remove-stream-btn" data-index="${index}">Usuń</button>
+    `;
+    streamListEl.appendChild(li);
+  });
+
+  document.querySelectorAll('.remove-stream-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(e.target.dataset.index, 10);
+      currentStreams.splice(idx, 1);
+      saveAndApplyStreams();
+    });
+  });
 }
+
+function saveAndApplyStreams() {
+  localStorage.setItem('metaverse_streams', JSON.stringify(currentStreams));
+  updateSceneVideos();
+  renderStreamList();
+}
+
+document.getElementById('add-stream-btn').addEventListener('click', () => {
+  const urlInput = document.getElementById('stream-url');
+  const titleInput = document.getElementById('stream-title');
+  
+  const url = urlInput.value.trim();
+  const title = titleInput.value.trim() || 'Nowy Stream';
+
+  if (url) {
+    currentStreams.push({ url, title });
+    urlInput.value = '';
+    titleInput.value = '';
+    saveAndApplyStreams();
+  } else {
+    alert('Proszę podać adres URL streama.');
+  }
+});
+
+document.getElementById('reset-streams-btn').addEventListener('click', () => {
+  if (confirm('Czy na pewno chcesz usunąć własne streamy i przywrócić domyślne z videos.json?')) {
+    localStorage.removeItem('metaverse_streams');
+    currentStreams = [];
+    loadStreams();
+  }
+});
+// -------------------
 
 function updateGazeTeleport(dt) {
   const dir = new THREE.Vector3();
@@ -99,10 +195,9 @@ function updateCaption() {
   }
 }
 
-// Obsługa włączania dźwięku po kliknięciu w ekran
 window.addEventListener('click', (event) => {
   if (inVR) return;
-  if (event.target.closest('.hud-btn, .mode-btn, #intro')) return;
+  if (event.target.closest('.hud-btn, .mode-btn, #intro, #stream-gui-panel')) return;
 
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
@@ -115,12 +210,8 @@ window.addEventListener('click', (event) => {
     const group = hits[0].object.parent;
     if (group.userData.isVideo && group.userData.videoElement) {
       const video = group.userData.videoElement;
-      if (video.muted) {
-        video.muted = false;
-        video.play();
-      } else {
-        video.muted = true;
-      }
+      video.muted = !video.muted;
+      if (!video.muted) video.play();
     }
   }
 });
@@ -164,8 +255,7 @@ function startExperience(mode) {
   controls.setMode(mode);
   document.getElementById('intro').classList.add('hidden');
   document.getElementById('hud').classList.remove('hidden');
-  
-  rig.position.set(0, 0, 0); // Start na środku sali
+  rig.position.set(0, 0, 0);
   
   if (isMobileDevice) {
     document.getElementById('joystick-base').classList.remove('hidden');
@@ -179,6 +269,13 @@ document.getElementById('start-tpp').addEventListener('click', () => startExperi
 document.getElementById('toggle-mode').addEventListener('click', () => controls.toggleMode());
 
 if (isMobileDevice) initMobileControls(controls);
+
+const vrBtn = document.getElementById('start-vr');
+if (!isMobileDevice) {
+  vrBtn.disabled = true;
+  vrBtn.classList.add('long-label');
+  vrBtn.querySelector('span').textContent = 'VR dostępne tylko w urządzeniach mobilnych';
+}
 
 vrBtn.addEventListener('click', async () => {
   if (vrBtn.disabled) return;
