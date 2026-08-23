@@ -2,11 +2,16 @@
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="screen-orientation" content="landscape">
 <title>Kino VR</title>
 <link rel="stylesheet" href="style.css">
+
+<!-- Biblioteka MEGA SDK do obsługi linków mega.nz -->
+<script src="https://cdn.jsdelivr.net/npm/megajs@1.1.0/dist/mega.min.js"></script>
 
 <script type="importmap">
 {
@@ -16,26 +21,405 @@
   }
 }
 </script>
+
+<style>
+  /* Reset i bazowe style */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+    background: #2a2a2a;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .hidden { display: none !important; }
+
+  body > canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+  }
+
+  /* Ekran startowy - szare tło */
+  #intro {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #2a2a2a;
+  }
+
+  .intro-panel {
+    text-align: center;
+    color: #fff;
+    max-width: 420px;
+    width: 90%;
+    padding: 40px 30px;
+    background: rgba(40, 40, 40, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  .intro-panel h1 {
+    font-size: 2.2rem;
+    margin-bottom: 12px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .intro-panel p {
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 24px;
+    line-height: 1.5;
+    font-size: 1rem;
+  }
+
+  .mode-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 220px;
+    margin: 0 auto;
+    padding: 18px 20px;
+    font-size: 1rem;
+    font-weight: 500;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    cursor: pointer;
+    transition: 0.2s ease;
+    line-height: 1.3;
+  }
+
+  .mode-btn .icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .mode-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
+  .mode-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .hint {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 16px;
+    line-height: 1.4;
+  }
+
+  /* HUD w VR */
+  #hud {
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    pointer-events: none;
+  }
+
+  .hud-btn {
+    pointer-events: auto;
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 0.9rem;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .hud-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  #video-caption {
+    position: absolute;
+    bottom: 10%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 1rem;
+    max-width: 80vw;
+    text-align: center;
+    pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  /* Panel GUI do zarządzania filmami */
+  #stream-gui-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+  }
+
+  .gui-panel-content {
+    background: rgba(40, 40, 40, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    padding: 24px;
+    width: 90%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    color: #fff;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+  }
+
+  .gui-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+  }
+
+  .gui-header h2 {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 600;
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 1.5rem;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    padding: 0 8px;
+  }
+
+  .close-btn:hover { opacity: 1; }
+
+  .gui-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .gui-form input {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+    font-size: 0.95rem;
+    outline: none;
+    width: 100%;
+  }
+
+  .gui-form input:focus {
+    border-color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .gui-form input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .action-btn {
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-size: 0.95rem;
+  }
+
+  .action-btn:hover { background: rgba(255, 255, 255, 0.25); }
+
+  .gui-hint {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 4px;
+    line-height: 1.4;
+    text-align: center;
+  }
+
+  .gui-list-container h3 {
+    font-size: 1rem;
+    margin-bottom: 10px;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  #stream-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .stream-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    gap: 10px;
+  }
+
+  .stream-item span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+
+  .remove-stream-btn {
+    background: rgba(255, 80, 80, 0.2);
+    border: 1px solid rgba(255, 80, 80, 0.4);
+    color: #ff8080;
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+
+  .remove-stream-btn:hover { background: rgba(255, 80, 80, 0.4); }
+
+  .gui-footer {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+  }
+
+  .danger-btn {
+    background: rgba(255, 165, 0, 0.15);
+    border: 1px solid rgba(255, 165, 0, 0.3);
+    color: #ffb347;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.2s;
+  }
+
+  .danger-btn:hover { background: rgba(255, 165, 0, 0.3); }
+
+  /* Status ładowania MEGA */
+  .loading-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
 </head>
 <body>
 
+<!-- Ekran startowy -->
 <div id="intro">
   <div class="intro-panel">
     <h1>Kino VR</h1>
-    <p>Statyczny obserwator w wirtualnej sali kinowej</p>
+    <p>Statyczny obserwator w wirtualnej sali kinowej.<br>
+       Oglądaj filmy z MEGA.nz i innych źródeł.</p>
     <button id="start-vr" class="mode-btn">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="10" rx="4.5"/><circle cx="8.2" cy="12" r="2"/><circle cx="15.8" cy="12" r="2"/><path d="M10.2 12h3.6"/></svg>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="7" width="20" height="10" rx="4.5"/>
+        <circle cx="8.2" cy="12" r="2"/>
+        <circle cx="15.8" cy="12" r="2"/>
+        <path d="M10.2 12h3.6"/>
+      </svg>
       <span>Wejdź do VR</span>
     </button>
-    <p class="hint">Wymaga urządzenia mobilnego z obsługą WebXR</p>
+    <p class="hint">Wymaga urządzenia mobilnego z obsługą WebXR<br>(Android Chrome / iOS Safari)</p>
+    <p class="hint" style="margin-top: 12px;">
+      <button id="open-stream-gui-intro" class="action-btn" style="padding: 8px 16px; font-size: 0.85rem;">
+        ⚙️ Zarządzaj filmami
+      </button>
+    </p>
   </div>
 </div>
 
+<!-- HUD w trybie VR -->
 <div id="hud" class="hidden">
   <button id="exit-vr" class="hud-btn">✕ Wyjdź z VR</button>
+  <button id="open-stream-gui" class="hud-btn" style="top: 60px;">⚙️ Filmy</button>
   <div id="video-caption" class="hidden"></div>
 </div>
 
+<!-- Panel GUI do zarządzania filmami -->
+<div id="stream-gui-panel" class="hidden">
+  <div class="gui-panel-content">
+    <div class="gui-header">
+      <h2>Zarządzanie Filmami</h2>
+      <button id="close-stream-gui" class="close-btn">✕</button>
+    </div>
+    
+    <div class="gui-form">
+      <input type="text" id="stream-url" placeholder="URL: bezpośredni (.mp4) lub MEGA (mega.nz/file/...)" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <input type="text" id="stream-title" placeholder="Tytuł filmu" autocomplete="off" />
+      <button id="add-stream-btn" class="action-btn">➕ Dodaj Film</button>
+      <p class="gui-hint">💡 Obsługiwane: bezpośrednie linki .mp4/.webm/.m3u8 oraz linki MEGA.nz (publiczne)</p>
+    </div>
+
+    <div class="gui-list-container">
+      <h3>Aktywne filmy (maks. 2 ekrany):</h3>
+      <ul id="stream-list"></ul>
+    </div>
+
+    <div class="gui-footer">
+      <button id="reset-streams-btn" class="danger-btn">🔄 Przywróć domyślne</button>
+    </div>
+  </div>
+</div>
+
+<!-- Główna logika aplikacji -->
 <script type="module" src="src/main.js"></script>
+
 </body>
 </html>
